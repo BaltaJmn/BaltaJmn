@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Builds the apps page served at https://baltajmn.dev/ (GitHub Pages) and the GitHub profile README from one list.
 
-Only apps that are on sale go in APPS. When one goes on sale or is pulled, edit APPS and run `python3 build.py`.
+Only apps that are on sale go in APPS. When one is pulled, edit APPS and run `python3 build.py`. Apps waiting for their
+first approval go in PENDING: they join the page by themselves once the App Store lookup has them (the GK35 runs
+`build.py` every day and pushes only when the page changes).
 Store links carry the same campaign format as conCampana() in gk/control/lib.mjs:
 App Store ct=<source>-<campaign>, Google Play referrer utm_source=<source>&utm_campaign=<ct>.
 Usage: python3 build.py [--test]
 """
-import html, sys, urllib.parse
+import html, json, sys, urllib.parse, urllib.request
 from datetime import date
 
 PT = 129564006
@@ -54,6 +56,31 @@ APPS = [
     ('Whistlepost', 'Tells you the railroad, subdivision and milepost where you stand, and the nearest crossing.',
      'https://whistlepost.baltajmn.dev/', 6836772563, None),
 ]
+
+# Waiting for their first App Store approval (24-11-2026). Same fields as APPS.
+PENDING = [
+    ('Beamara', 'Draws your room to scale and tells you where a projector can stand to fill a screen.',
+     'https://beamara.baltajmn.dev/', 6835204509, None),
+    ('Dryspell', 'Reads the hourly forecast against the limits of your paint, stain, concrete or sealer and shows the hours that work.',
+     'https://dryspell.baltajmn.dev/', 6832972275, None),
+    ('Exertional', 'The Dictionary of Occupational Titles and the Medical-Vocational Guidelines, for Social Security disability hearings.',
+     'https://exertional.baltajmn.dev/', 6835880354, None),
+    ('Hawkspan', "Ranges deer and elk with your iPhone's camera, plus the level distance for tree stands.",
+     'https://hawkspan.baltajmn.dev/', 6833985116, None),
+    ('Humlark', 'Writes the melody you hum, sing or whistle as sheet music, with PDF, MIDI and MusicXML export.',
+     'https://humlark.baltajmn.dev/', 6833111608, None),
+    ('Ledgerleaf', 'Values your U.S. savings bonds and shows which ones stopped earning. Series EE, I and E.',
+     'https://ledgerleaf.baltajmn.dev/', 6833053468, None),
+    ('Plyscribe', 'Reads a photographed handwritten chess scoresheet and writes a clean PGN, checking every move.',
+     'https://plyscribe.baltajmn.dev/', 6833197630, None),
+]
+APP_ADS = 'google.com, pub-1605179202100483, DIRECT, f08c47fec0942fa0\n'  # AdMob, also served by every app site with ads
+
+
+def on_sale(app_id):
+    """In the App Store lookup. No answer stops the build: a network error must not drop an app from the page."""
+    with urllib.request.urlopen(f'https://itunes.apple.com/lookup?id={app_id}&country=us', timeout=30) as r:
+        return json.load(r)['resultCount'] > 0
 
 
 def ct(source, campaign=''):
@@ -149,12 +176,14 @@ def test():
 if __name__ == '__main__':
     if '--test' in sys.argv:
         test(); sys.exit()
+    APPS.extend(a for a in PENDING if on_sale(a[3]))
     open('index.html', 'w').write(page())
     open('README.md', 'w').write(readme())
     open('robots.txt', 'w').write(f'User-agent: *\nAllow: /\n\nSitemap: {SITE}sitemap.xml\n')
     open('sitemap.xml', 'w').write('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
                                    f'<url><loc>{SITE}</loc><lastmod>{date.today().isoformat()}</lastmod></url>\n</urlset>\n')
     open(f'{KEY}.txt', 'w').write(KEY)
+    open('app-ads.txt', 'w').write(APP_ADS)
     open('CNAME', 'w').write('baltajmn.dev\n')
     open('.nojekyll', 'w').write('')
     print('built', len(APPS), 'apps')
